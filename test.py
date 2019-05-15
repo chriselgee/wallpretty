@@ -35,16 +35,81 @@ SPI_PORT   = 0
 SPI_DEVICE = 0
 pixels = Adafruit_WS2801.WS2801Pixels(PIXEL_COUNT, spi=SPI.SpiDev(SPI_PORT, SPI_DEVICE), gpio=GPIO)
 
-# Define an X,Y grid for pixels with 0,0 in the lower left
-pgrid = [[]]
-for i in range(int(PIXEL_COUNT / 10)):
+
+# Define an Y,X tgrid for pixels with 0,0 in the lower left
+# Assumes back and forth layout of LEDs, starting in lower-right
+ROW_LENGTH = 10
+tgrid = []
+for i in range(int(PIXEL_COUNT / ROW_LENGTH)):
     row = []
-    for j in range(10):
+    for j in range(ROW_LENGTH):
         if (i % 2 == 1): # account for wire snaking back and forth
-            row.insert(j,j + (i*10) + 1)
+            row.insert(j,j + (i*ROW_LENGTH))
         else:
-            row.insert((j),(i * 10 + 10) - j)
+            row.insert((j),(i * ROW_LENGTH + ROW_LENGTH) - j -1)
+    tgrid.insert(i,row)
+
+# transpose to pgrid so we can use X,Y instead of Y,X to address pixels
+pgrid=[]
+for i in range(len(tgrid[0])):
+    row=[]
+    for j in range(len(tgrid)):
+        row.insert(j,tgrid[j][i])
     pgrid.insert(i,row)
+
+def initial(pixels, letter='j'):
+    pixels.clear()
+    capletter = []
+    if letter == 'j':
+      for i in range(14,3,-1): # vertical piece
+          capletter.append([5,i])
+      capletter += [[4,3],[3,2],[2,2],[1,3],[0,4]] # hooky bit
+      for i in range(10): # top mark
+          capletter.append([i,15])
+    elif letter == 'r':
+        for v in range(14,0,-1):
+            capletter.append([1,v])
+        capletter += [[2,14],[3,14],[4,14],[5,14],[6,13],[7,12],[7,11],[6,10],[5,9],[4,8],[3,8],[2,8]]
+        for d in range(7):
+            x = 4
+            y = 7
+            capletter.append([x + int(d/2), y - d])
+    elif letter == 'a':
+        for d in range(14):
+            x = 1
+            y = 1
+            capletter.append([x+int(d/3.2),y+d])
+            capletter.append([10-(x+int(d/3.2)),y+d])
+        for h in range(3,8):
+            capletter += [[h,8]]
+    else: # assume E
+        for v in range(14,0,-1):
+            capletter.append([1,v])
+        for h in (14,7,1):
+            for d in range(1,9):
+                capletter.append([d,h])
+    r = 255
+    g = 255
+    b = 255
+    capletter = capletter
+    for p in capletter: # draw pixel by pixel
+        if args.verbosity > 1: print(OV+"p is {OR}{p}{OM}".format(p=p,OR=OR,OM=OM))
+        if args.verbosity > 1: print(OV+"pgrid[p] is {OR}{g}{OM}".format(g=pgrid[p[0]][p[1]],OR=OR,OM=OM))
+        pixels.set_pixel(pgrid[p[0]][p[1]],Adafruit_WS2801.RGB_to_color( r, g, b ))
+        pixels.show()
+        time.sleep(.1)
+    for c in range(9):
+        if args.verbosity > 1: print(OV+"c is {OR}{c}{OM}".format(c=c,OR=OR,OM=OM))
+        for p in capletter:
+            if (c % 3 == 0):
+                pixels.set_pixel(pgrid[p[0]][p[1]],Adafruit_WS2801.RGB_to_color( 255, 0, 0 ))
+            elif (c % 3 == 1):
+                pixels.set_pixel(pgrid[p[0]][p[1]],Adafruit_WS2801.RGB_to_color( 0, 255, 0 ))
+            else:
+                pixels.set_pixel(pgrid[p[0]][p[1]],Adafruit_WS2801.RGB_to_color( 0, 0, 255 ))
+        pixels.show()
+        time.sleep(.1)
+
 
 # Define the wheel function to interpolate between different hues.
 def wheel(pos):
@@ -159,6 +224,10 @@ if __name__ == "__main__":
     pixels.clear()
     pixels.show()  # Make sure to call show() after changing any pixels!
     for c in range(args.count):
+        initial(pixels,'j')
+        initial(pixels,'e')
+        initial(pixels,'a')
+        initial(pixels,'r')
         checker_board(pixels, blink_times = 6, color=(255,255,255))
         rainbow_cycle_successive(pixels, wait=0.01)
         rainbow_cycle(pixels, wait=0.01)
@@ -170,4 +239,3 @@ if __name__ == "__main__":
             blink_color(pixels, blink_times = 1, color=(0, 0, 255))
         rainbow_colors(pixels)
         brightness_decrease(pixels)
-        
