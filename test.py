@@ -81,7 +81,7 @@ def initial(pixels, letter='j'):
             capletter.append([x+int(d/3.2),y+d])
             capletter.append([10-(x+int(d/3.2)),y+d])
         for h in range(3,8):
-            capletter += [[h,8]]
+            capletter += [[h,7]]
     else: # assume E
         for v in range(14,0,-1):
             capletter.append([1,v])

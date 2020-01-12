@@ -3,6 +3,13 @@
 FROM python:3.7
 MAINTAINER "Chris Elgee"
 
+RUN apt-get update
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+apt-get -y --no-install-recommends install \
+python3-pip
+
+RUN python3 -m pip install quart
+
 RUN useradd -m dockwiz
 
 RUN pwd
@@ -12,9 +19,9 @@ COPY *py /home/dockwiz/
 RUN mkdir /home/dockwiz/templates/
 COPY templates/index.html /home/dockwiz/templates/
 
+RUN chown -R dockwiz: /home/dockwiz/
+
 USER dockwiz
 WORKDIR /home/dockwiz/
-
-RUN chown -R dockwiz /home/dockwiz/
 
 CMD ["python3","./websocket-quart.py"]
