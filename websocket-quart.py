@@ -3,6 +3,7 @@ from functools import wraps
 from quart import Quart, render_template, websocket, copy_current_websocket_context, request
 import asyncio
 import json
+from ws2801_funcs import rainbow_cycle
 
 OV = '\x1b[0;33m' # verbose
 OR = '\x1b[0;34m' # routine
@@ -48,6 +49,8 @@ async def consumer():
             dataj = json.loads(data)
             if dataj["Type"] == "Chat":
                 if debuggin: print(f'{OV}, broadcasting as chat {OM}')
+                if dataj["Data"].lower() == "rainbow":
+                    rainbow_cycle()
                 await broadcast(f'{{"Type":"Chat","Data":"{dataj["Data"]}"}}')
             if dataj["Type"] == "Pixel":
                 # update the board

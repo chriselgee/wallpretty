@@ -57,7 +57,7 @@ for i in range(len(tgrid[0])):
         row.insert(j,tgrid[j][i])
     pgrid.insert(i,row)
 
-def initial(pixels, letter='j'):
+def initial(pixels=pixels, letter='j'):
     pixels.clear()
     capletter = []
     if letter == 'j':
@@ -123,7 +123,7 @@ def wheel(pos):
         return Adafruit_WS2801.RGB_to_color(0, pos * 3, 255 - pos * 3)
 
 # Define rainbow cycle function to do a cycle of all hues.
-def rainbow_cycle_successive(pixels, wait=0.001):
+def rainbow_cycle_successive(pixels=pixels, wait=0.001):
     if args.verbosity > 1: print("rainbow_cycle_successive(pixels={p},wait={w})".format(p=pixels,w=wait))
     for i in range(pixels.count()):
         # tricky math! we use each pixel as a fraction of the full 96-color wheel
@@ -135,7 +135,7 @@ def rainbow_cycle_successive(pixels, wait=0.001):
         if wait > 0:
             time.sleep(wait)
 
-def rainbow_cycle(pixels, wait=0.005):
+def rainbow_cycle(pixels=pixels, wait=0.005):
     if args.verbosity > 1: print("rainbow_cycle(pixels={p},wait={w})".format(p=pixels,w=wait))
     for j in range(256): # one cycle of all 256 colors in the wheel
         for i in range(pixels.count()):
@@ -144,7 +144,7 @@ def rainbow_cycle(pixels, wait=0.005):
         if wait > 0:
             time.sleep(wait)
 
-def rainbow_colors(pixels, wait=0.05):
+def rainbow_colors(pixels=pixels, wait=0.05):
     if args.verbosity > 1: print("rainbow_colors(pixels={p},wait={w})".format(p=pixels,w=wait))
     for j in range(256): # one cycle of all 256 colors in the wheel
         for i in range(pixels.count()):
@@ -153,7 +153,7 @@ def rainbow_colors(pixels, wait=0.05):
         if wait > 0:
             time.sleep(wait)
 
-def brightness_decrease(pixels, wait=0.01, step=1):
+def brightness_decrease(pixels=pixels, wait=0.01, step=1):
     if args.verbosity > 1: print("brightness_decrease(pixels={p},wait={w},step={s})".format(p=pixels,w=wait,s=step))
     for j in range(int(256 // step)):
         for i in range(pixels.count()):
@@ -166,7 +166,7 @@ def brightness_decrease(pixels, wait=0.01, step=1):
         if wait > 0:
             time.sleep(wait)
 
-def blink_color(pixels, blink_times=5, wait=0.005, color=(255,0,0)):
+def blink_color(pixels=pixels, blink_times=5, wait=0.005, color=(255,0,0)):
     if args.verbosity > 1: print("blink_color(pixels={p},blink_times={b},wait={w},color={c})".format(p=pixels,b=blink_times,w=wait,c=[color[0],color[1],color[2]]))
     for i in range(blink_times):
         # blink two times, then wait
@@ -181,7 +181,7 @@ def blink_color(pixels, blink_times=5, wait=0.005, color=(255,0,0)):
             time.sleep(0.08)
         time.sleep(wait)
 
-def checker_board(pixels, blink_times=5, wait=0.005, color=(255,0,0)):
+def checker_board(pixels=pixels, blink_times=5, wait=0.005, color=(255,0,0)):
     if args.verbosity > 1: print("blink_color(pixels={p},blink_times={b},wait={w},color={c})".format(p=pixels,b=blink_times,w=wait,c=[color[0],color[1],color[2]]))
     for i in range(blink_times):
         # blink two times, then wait
@@ -205,7 +205,7 @@ def checker_board(pixels, blink_times=5, wait=0.005, color=(255,0,0)):
             pixels.clear()
         time.sleep(wait)
 
-def appear_from_back(pixels, color=(255, 0, 0)):
+def appear_from_back(pixels=pixels, color=(255, 0, 0)):
     if args.verbosity > 1: print("appear_from_back(pixels={p},color={c})".format(p=pixels,c=[color[0],color[1],color[2]]))
     pos = 0
     for i in range(pixels.count()):
