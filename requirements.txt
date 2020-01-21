@@ -1,0 +1,6 @@
+# Requirements for connecting to WS2801
+adafruit_ws2801
+RPi.GPIO
+
+# Requirement for running web server
+quart
