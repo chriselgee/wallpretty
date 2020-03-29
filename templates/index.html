@@ -64,11 +64,13 @@
         }
         if (incoming.Type == "Pixel"){ // handle incoming pixel changes
           var cells = document.getElementsByClassName("cell");
-          // console.log("Trying to change a pixel; incoming.Data looks like " + incoming.Data);
-          // Data looks like "[1, 2, red]"
+          console.log("Trying to change a pixel; incoming.Data looks like " + incoming.Data);
+          // Data looks like "[1, 2, rgb(255, 0, 0)]"
           var targetx = incoming.Data.split(', ')[0].slice(1); // targetx comes before comma and after bracket
           var targety = incoming.Data.split(', ')[1]; // targety is between commas
-          var targetcolor = incoming.Data.split(', ')[2].slice(0,incoming.Data.split(', ')[2].length - 1) // color is at the end, minus bracket
+          var colorLen = incoming.Data.split('(')[1].length - 2 // we want to drop the trailing ")]"
+          var targetcolor = "rgb(" + incoming.Data.split('(')[1].slice(0,colorLen) + ")" // color is at the end
+          console.log("X is "+targetx+", Y is "+targety+", and color = "+targetcolor)
           for (i = 0; i < cells.length; i++) {
             // console.log("i is " + i + ", and incoming.Data[0] is " + incoming.Data[0] + " and cells[i].dataset.x is " + cells[i].dataset.x)
             if (targetx == cells[i].dataset.x && targety == cells[i].dataset.y) {
@@ -112,9 +114,9 @@
     </script>
     <div style="display: table;">
       <div style="display: table-row; height: 60px;">
-        <div class="brush" name="brush" data-active="True"  id="redbrush" style="background-color:red;" onclick="brushClick(this)">Red</div>
-        <div class="brush" name="brush" data-active="False" id="greenbrush" style="background-color:green;" onclick="brushClick(this)">Green</div>
-        <div class="brush" name="brush" data-active="False" id="bluebrush" style="background-color:blue;" onclick="brushClick(this)">Blue</div>
+        <div class="brush" name="brush" data-active="True"  id="redbrush" style="background-color:rgb(255,0,0);" onclick="brushClick(this)">Red</div>
+        <div class="brush" name="brush" data-active="False" id="greenbrush" style="background-color:rgb(0,255,0);" onclick="brushClick(this)">Green</div>
+        <div class="brush" name="brush" data-active="False" id="bluebrush" style="background-color:rgb(0,0,255);" onclick="brushClick(this)">Blue</div>
       </div>
     </div>
     <div class="grid">

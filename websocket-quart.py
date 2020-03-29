@@ -102,13 +102,20 @@ async def consumer():
                 if dataj["Data"].lower() == "rainbow":
                     rainbow_cycle(pixels)
                     brightness_decrease(pixels)
+                if dataj["Data"].lower() == "clear":
+                    pixels.clear()
+                    pixels.show()
                 await broadcast(f'{{"Type":"Chat","Data":"{dataj["Data"]}"}}')
             if dataj["Type"] == "Pixel":
                 # update the board
                 x = int(dataj['Data'].split('[')[1].split(',')[0])
                 y = int(dataj['Data'].split('[')[1].split(',')[1])
+                colorBlob = dataj['Data'].split('(')[1][:-2] # like "255, 0, 0"
+                r = int(colorBlob.split(',')[0])
+                g = int(colorBlob.split(',')[1])
+                b = int(colorBlob.split(',')[2])
                 if debuggin: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
-                pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( 255, 0, 0 ))
+                pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( r, g, b ))
                 pixels.show()
                 if debuggin: print(f'{OV}, broadcasting as pixel {OM}')
                 await broadcast(f'{{"Type":"Pixel","Data":"{dataj["Data"]}"}}')
@@ -163,4 +170,6 @@ async def index():
     return await render_template('index.html', xs=xs, ys=ys, height=height)
 
 if __name__ == '__main__':
+    pixels.clear()
+    pixels.show()
     app.run(host="0.0.0.0", port=5000)
