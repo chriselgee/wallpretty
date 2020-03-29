@@ -110,20 +110,34 @@
         }
         brush.dataset.active = "True";
         console.log("The " + brush.style.backgroundColor + " brush is now active")
+        colorBlob = brush.style.backgroundColor.split('(')[1].split(')')[0].split(',') // like [255, 0, 0]
+        document.getElementById("redBox").value = colorBlob[0]
+        document.getElementById("greenBox").value = colorBlob[1]
+        document.getElementById("blueBox").value = colorBlob[2]
       }
     </script>
     <div style="display: table;">
       <div style="display: table-row; height: 60px;">
+        <div class="brush" name="brush" data-active="False" id="whitebrush" style="background-color:rgb(255,255,255);" onclick="brushClick(this)">White</div>
         <div class="brush" name="brush" data-active="True"  id="redbrush" style="background-color:rgb(255,0,0);" onclick="brushClick(this)">Red</div>
+        <div class="brush" name="brush" data-active="False" id="yellowbrush" style="background-color:rgb(255,255,0);" onclick="brushClick(this)">Yellow</div>
         <div class="brush" name="brush" data-active="False" id="greenbrush" style="background-color:rgb(0,255,0);" onclick="brushClick(this)">Green</div>
+        <div class="brush" name="brush" data-active="False" id="lybluebrush" style="background-color:rgb(0,255,255);" onclick="brushClick(this)">LtBlue</div>
         <div class="brush" name="brush" data-active="False" id="bluebrush" style="background-color:rgb(0,0,255);" onclick="brushClick(this)">Blue</div>
+        <div class="brush" name="brush" data-active="False" id="purplebrush" style="background-color:rgb(255,0,255);" onclick="brushClick(this)">Purple</div>
+        <div class="brush" name="brush" data-active="False" id="orangebrush" style="background-color:rgb(255,165,0);" onclick="brushClick(this)">Orange</div>
+        <div class="brush" name="brush" data-active="False" id="brownbrush" style="background-color:rgb(165,42,42);" onclick="brushClick(this)">Brown</div>
+        <div class="brush" name="brush" data-active="False" id="blackbrush" style="background-color:rgb(0,0,0);" onclick="brushClick(this)">Black</div>
+        <div class="colorBox" name="colorBox" id="">Red<input name="redBox" id="redBox" type="text"></div>
+        <div class="colorBox" name="colorBox" id="">Green<input name="greenBox" id="greenBox" type="text"></div>
+        <div class="colorBox" name="colorBox" id="">Blue<input name="blueBox" id="blueBox" type="text"></div>
       </div>
     </div>
     <div class="grid">
       {% for y in ys %}
         <div class="row">
           {% for x in xs %}
-          <div class="cell" onclick="clickCell(this)" data-x="{{ x }}" data-y="{{ y }}">{{ x }},{{ y }}</div>
+          <div class="cell" onclick="clickCell(this)" style="background-color:rgb(0,0,0);" data-x="{{ x }}" data-y="{{ y }}">{{ x }},{{ y }}</div>
           {% endfor %}
         </div>
       {% endfor %}
