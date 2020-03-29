@@ -3,7 +3,16 @@ from functools import wraps
 from quart import Quart, render_template, websocket, copy_current_websocket_context, request
 import asyncio
 import json
-from ws2801_funcs import rainbow_cycle
+import argparse
+import time
+
+# Import the WS2801 module and GPIO
+import RPi.GPIO as GPIO
+import Adafruit_WS2801
+import Adafruit_GPIO.SPI as SPI
+
+# import specific fancy functions
+from ws2801_funcs import *
 
 OV = '\x1b[0;33m' # verbose
 OR = '\x1b[0;34m' # routine
@@ -16,6 +25,47 @@ debuggin = True
 app = Quart(__name__)
 connected = set()
 
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-b", "--back2front", help="whether to do the back-to-front pixel stacking (default=False)", action="store_true")
+parser.add_argument("-c", "--count", type=int, default=1, help="number of cycles through the program (default=1)")
+parser.add_argument("-f", "--flashes", type=int, default=0, help="number of flashes during cycles (default=0)")
+parser.add_argument("-p", "--pixels", type=int, default=200, help="number of pixels in LED set (default=200)")
+parser.add_argument("-v", "--verbosity", action="count", default=0, help="be more verbose")
+args = parser.parse_args()
+
+# Configure the count of pixels:
+PIXEL_COUNT = args.pixels
+
+if args.verbosity > 0:
+  print("Running program for {} pixels".format(args.pixels))
+
+# Alternatively specify a hardware SPI connection on /dev/spidev0.0:
+SPI_PORT   = 0
+SPI_DEVICE = 0
+pixels = Adafruit_WS2801.WS2801Pixels(PIXEL_COUNT, spi=SPI.SpiDev(SPI_PORT, SPI_DEVICE), gpio=GPIO)
+
+
+# Define an Y,X tgrid for pixels with 0,0 in the lower left
+# Assumes back and forth layout of LEDs, starting in lower-right
+ROW_LENGTH = 10
+tgrid = []
+for i in range(int(PIXEL_COUNT / ROW_LENGTH)):
+    row = []
+    for j in range(ROW_LENGTH):
+        if (i % 2 == 1): # account for wire snaking back and forth
+            row.insert(j,j + (i*ROW_LENGTH))
+        else:
+            row.insert((j),(i * ROW_LENGTH + ROW_LENGTH) - j -1)
+    tgrid.insert(i,row)
+
+# transpose to pgrid so we can use X,Y instead of Y,X to address pixels
+pgrid=[]
+for i in range(len(tgrid[0])):
+    row=[]
+    for j in range(len(tgrid)):
+        row.insert(j,tgrid[j][i])
+    pgrid.insert(i,row)
 
 def collect_websocket(func):
     # when someone connects to /ws, add to inventory of websockets
@@ -50,10 +100,16 @@ async def consumer():
             if dataj["Type"] == "Chat":
                 if debuggin: print(f'{OV}, broadcasting as chat {OM}')
                 if dataj["Data"].lower() == "rainbow":
-                    rainbow_cycle()
+                    rainbow_cycle(pixels)
+                    brightness_decrease(pixels)
                 await broadcast(f'{{"Type":"Chat","Data":"{dataj["Data"]}"}}')
             if dataj["Type"] == "Pixel":
                 # update the board
+                x = int(dataj['Data'].split('[')[1].split(',')[0])
+                y = int(dataj['Data'].split('[')[1].split(',')[1])
+                if debuggin: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
+                pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( 255, 0, 0 ))
+                pixels.show()
                 if debuggin: print(f'{OV}, broadcasting as pixel {OM}')
                 await broadcast(f'{{"Type":"Pixel","Data":"{dataj["Data"]}"}}')
         except Exception as ex: # catch exceptions
@@ -107,4 +163,4 @@ async def index():
     return await render_template('index.html', xs=xs, ys=ys, height=height)
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(host="0.0.0.0", port=5000)

@@ -8,7 +8,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
 apt-get -y --no-install-recommends install \
 python3-pip
 
-RUN python3 -m pip install quart
+RUN python3 -m pip install quart RPi.GPIO adafruit-ws2801
 
 RUN useradd -m dockwiz
 
