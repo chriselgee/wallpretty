@@ -89,14 +89,10 @@
         ws.send('{"Type":"Chat","Data":"' + content + '"}');
       };
       function clickCell(cell) { // change a cell's color when clicked
-        brushes = document.getElementsByClassName("brush"); // collect brushes
-        color = "black";
-        for (var i = 0; i < brushes.length; i++) {
-          if (brushes[i].dataset.active == "True") { // find which is active
-            color = brushes[i].style.backgroundColor; // set color to that brush
-            // console.log("Color identified as " + color);
-          }
-        }
+        var r = document.getElementById('redBox').value
+        var g = document.getElementById('greenBox').value
+        var b = document.getElementById('blueBox').value
+        var color = "rgb("+r+", "+g+", "+b+")"
         // cell.style.backgroundColor = color; // change cell color on page
         console.log("Setting cell " + cell.dataset.x + ", " + cell.dataset.y + " to " + color); // log change to console
         ws.send('{"Type":"Pixel","Data":"[' + cell.dataset.x + ', ' + cell.dataset.y + ', ' + color + ']"}') // ws message back to server to change cell in device
@@ -128,9 +124,9 @@
         <div class="brush" name="brush" data-active="False" id="orangebrush" style="background-color:rgb(255,165,0);" onclick="brushClick(this)">Orange</div>
         <div class="brush" name="brush" data-active="False" id="brownbrush" style="background-color:rgb(165,42,42);" onclick="brushClick(this)">Brown</div>
         <div class="brush" name="brush" data-active="False" id="blackbrush" style="background-color:rgb(0,0,0);" onclick="brushClick(this)">Black</div>
-        <div class="colorBox" name="colorBox" id="">Red<input name="redBox" id="redBox" type="text"></div>
-        <div class="colorBox" name="colorBox" id="">Green<input name="greenBox" id="greenBox" type="text"></div>
-        <div class="colorBox" name="colorBox" id="">Blue<input name="blueBox" id="blueBox" type="text"></div>
+        <div class="colorBox" name="colorBox" id=""><input name="redBox" id="redBox" type="text" size="3">Red  </div>
+        <div class="colorBox" name="colorBox" id=""><input name="greenBox" id="greenBox" type="text" size="3">Green</div>
+        <div class="colorBox" name="colorBox" id=""><input name="blueBox" id="blueBox" type="text" size="3">Blue </div>
       </div>
     </div>
     <div class="grid">
