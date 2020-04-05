@@ -49,8 +49,10 @@ pixels = Adafruit_WS2801.WS2801Pixels(PIXEL_COUNT, spi=SPI.SpiDev(SPI_PORT, SPI_
 # Define an Y,X tgrid for pixels with 0,0 in the lower left
 # Assumes back and forth layout of LEDs, starting in lower-right
 ROW_LENGTH = 10
+COL_LENGTH = 0
 tgrid = []
 for i in range(int(PIXEL_COUNT / ROW_LENGTH)):
+    COL_LENGTH += 1
     row = []
     for j in range(ROW_LENGTH):
         if (i % 2 == 1): # account for wire snaking back and forth
@@ -66,6 +68,14 @@ for i in range(len(tgrid[0])):
     for j in range(len(tgrid)):
         row.insert(j,tgrid[j][i])
     pgrid.insert(i,row)
+
+# maintain pixel state for clients who join after start
+pixelState = []
+for column in pgrid:
+    row = []
+    for pixel in column:
+        row.append([0,0,0])
+    pixelState.append(row)
 
 def collect_websocket(func):
     # when someone connects to /ws, add to inventory of websockets
@@ -97,16 +107,19 @@ async def consumer():
         if debuggin: print(f'{OV}received data {OR}{data}{OM}', end='')
         try:
             dataj = json.loads(data)
-            if dataj["Type"] == "Chat":
+            if dataj["Type"] == "Chat": # client is chatting
                 if debuggin: print(f'{OV}, broadcasting as chat {OM}')
                 if dataj["Data"].lower() == "rainbow":
                     rainbow_cycle(pixels)
                     brightness_decrease(pixels)
                 if dataj["Data"].lower() == "clear":
                     pixels.clear()
+                    for column in pixelState:
+                        for pixel in column:
+                            pixelState[column][pixel] = [0,0,0]
                     pixels.show()
                 await broadcast(f'{{"Type":"Chat","Data":"{dataj["Data"]}"}}')
-            if dataj["Type"] == "Pixel":
+            if dataj["Type"] == "Pixel": # client is setting one pixel
                 # update the board
                 x = int(dataj['Data'].split('[')[1].split(',')[0])
                 y = int(dataj['Data'].split('[')[1].split(',')[1])
@@ -115,10 +128,15 @@ async def consumer():
                 g = int(colorBlob.split(',')[1])
                 b = int(colorBlob.split(',')[2])
                 if debuggin: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
+                pixelState[x][y] = [r,g,b]
                 pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( r, g, b ))
                 pixels.show()
                 if debuggin: print(f'{OV}, broadcasting as pixel {OM}')
                 await broadcast(f'{{"Type":"Pixel","Data":"{dataj["Data"]}"}}')
+            if dataj["Type"] == "Update": # client wants to know the whole image
+                for column, col in zip(pixelState, range(COL_LENGTH)):
+                    for pixel, pix in zip(column, range(ROW_LENGTH)):
+                        await broadcast(f'{{"Type":"Pixel","Data":"[{col},{pix}, rgb({pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]})"')
         except Exception as ex: # catch exceptions
             print(f'{OE}*** Exception in websocket-quart.py, consumer(): {OR}{ex}{OM}') 
             # return {"Success":False, "Error":f"{inspect.currentframe().f_code.co_name}-Exception: {ex}"}
