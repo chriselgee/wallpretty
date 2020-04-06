@@ -111,6 +111,10 @@
         document.getElementById("greenBox").value = colorBlob[1]
         document.getElementById("blueBox").value = colorBlob[2]
       }
+      console.log("Asking for initial board setup");
+      ws.onopen = function (event) {
+        ws.send('{"Type":"Update"}'); // ws message back to server to get initial state of board    
+      }
     </script>
     <div style="display: table;">
       <div style="display: table-row; height: 60px;">
