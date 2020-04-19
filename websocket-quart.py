@@ -92,7 +92,7 @@ def collect_websocket(func):
 
 async def broadcast(message):
     # broadcast a message to all connected websockets
-    if debuggin: print(f'{OV}entered broadcast(){OM}')
+    if debuggin: print(f'{OV}broadcasting {OR}{message}{OM}')
     for websock in connected:
         await websock.send(message)
 
@@ -100,9 +100,7 @@ async def broadcast(message):
 async def consumer():
     # what to do with incoming websocket messages
     while True:
-        if debuggin: print(f'{OV}entered consumer(){OM}')
         data = await websocket.receive()
-        # await broadcast(data)
         if debuggin: print(f'{OV}received data {OR}{data}{OM}', end='')
         try:
             dataj = json.loads(data)
@@ -126,7 +124,7 @@ async def consumer():
                 r = dataj['Data'][2]
                 g = dataj['Data'][3]
                 b = dataj['Data'][4]
-                if debuggin: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
+                # if debuggin: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
                 pixelState[x][y] = [r,g,b]
                 pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( r, g, b ))
                 pixels.show()
