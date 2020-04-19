@@ -65,11 +65,13 @@
         if (incoming.Type == "Pixel"){ // handle incoming pixel changes
           var cells = document.getElementsByClassName("cell");
           console.log("Trying to change a pixel; incoming.Data looks like " + incoming.Data);
-          // Data looks like "[1, 2, rgb(255, 0, 0)]"
-          var targetx = incoming.Data.split(', ')[0].slice(1); // targetx comes before comma and after bracket
-          var targety = incoming.Data.split(', ')[1]; // targety is between commas
-          var colorLen = incoming.Data.split('(')[1].length - 2 // we want to drop the trailing ")]"
-          var targetcolor = "rgb(" + incoming.Data.split('(')[1].slice(0,colorLen) + ")" // color is at the end
+          // Data looks like "[1, 2, 255, 0, 0]" for "[x, y, r, g, b]"
+          var targetx = incoming.Data[0];
+          var targety = incoming.Data[1];
+          var targetr = incoming.Data[2];
+          var targetg = incoming.Data[3];
+          var targetb = incoming.Data[4];
+          var targetcolor = "rgb(" + targetr + ', ' + targetg + ', ' + targetb + ")" // e.g. "rgb(255, 0, 0)"
           console.log("X is "+targetx+", Y is "+targety+", and color = "+targetcolor)
           for (i = 0; i < cells.length; i++) {
             // console.log("i is " + i + ", and incoming.Data[0] is " + incoming.Data[0] + " and cells[i].dataset.x is " + cells[i].dataset.x)
@@ -92,10 +94,10 @@
         var r = document.getElementById('redBox').value
         var g = document.getElementById('greenBox').value
         var b = document.getElementById('blueBox').value
-        var color = "rgb("+r+", "+g+", "+b+")"
+        var color = r+", "+g+", "+b
         // cell.style.backgroundColor = color; // change cell color on page
         console.log("Setting cell " + cell.dataset.x + ", " + cell.dataset.y + " to " + color); // log change to console
-        ws.send('{"Type":"Pixel","Data":"[' + cell.dataset.x + ', ' + cell.dataset.y + ', ' + color + ']"}') // ws message back to server to change cell in device
+        ws.send('{"Type":"Pixel","Data":[' + cell.dataset.x + ', ' + cell.dataset.y + ', ' + r+', '+g+', '+b + ']}') // ws message back to server to change cell in device
         return;
       }
       function brushClick(brush) { // change the brush color when clicked

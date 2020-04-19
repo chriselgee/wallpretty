@@ -116,27 +116,26 @@ async def consumer():
                     for column, col in zip(pixelState, range(ROW_LENGTH)):
                         for pixel, pix in zip(column, range(COL_LENGTH)):
                             pixelState[col][pix] = [0,0,0]
-                            await broadcast(f'{{"Type":"Pixel","Data":"[{col}, {pix}, rgb(0, 0, 0)]"}}')
+                            await broadcast(f'{{"Type":"Pixel","Data":[{col}, {pix}, 0, 0, 0]}}')
                     pixels.show()
                 await broadcast(f'{{"Type":"Chat","Data":"{dataj["Data"]}"}}')
-            if dataj["Type"] == "Pixel": # client is setting one pixel
-                # update the board
-                x = int(dataj['Data'].split('[')[1].split(',')[0])
-                y = int(dataj['Data'].split('[')[1].split(',')[1])
-                colorBlob = dataj['Data'].split('(')[1][:-2] # like "255, 0, 0"
-                r = int(colorBlob.split(',')[0])
-                g = int(colorBlob.split(',')[1])
-                b = int(colorBlob.split(',')[2])
+            if dataj["Type"] == "Pixel": # client is setting one pixel; update the board
+                # incoming message looks like {"Type":"Pixel","Data":[3, 19, 255,  165,  0]}
+                x = dataj['Data'][0]
+                y = dataj['Data'][1]
+                r = dataj['Data'][2]
+                g = dataj['Data'][3]
+                b = dataj['Data'][4]
                 if debuggin: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
                 pixelState[x][y] = [r,g,b]
                 pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( r, g, b ))
                 pixels.show()
                 if debuggin: print(f'{OV}, broadcasting as pixel {OM}')
-                await broadcast(f'{{"Type":"Pixel","Data":"{dataj["Data"]}"}}')
+                await broadcast(f'{{"Type":"Pixel","Data":{dataj["Data"]}}}')
             if dataj["Type"] == "Update": # client wants to know the whole image
                 for column, col in zip(pixelState, range(ROW_LENGTH)):
                     for pixel, pix in zip(column, range(COL_LENGTH)):
-                        await broadcast(f'{{"Type":"Pixel","Data":"[{col}, {pix}, rgb({pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]})]"}}')
+                        await broadcast(f'{{"Type":"Pixel","Data":"[{col}, {pix}, {pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]}]"}}')
         except Exception as ex: # catch exceptions
             print(f'{OE}*** Exception in websocket-quart.py, consumer(): {OR}{ex}{OM}') 
             # return {"Success":False, "Error":f"{inspect.currentframe().f_code.co_name}-Exception: {ex}"}
