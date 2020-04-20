@@ -1,30 +1,57 @@
 #!/usr/bin/env python3
 from functools import wraps
-from quart import Quart, render_template, websocket, copy_current_websocket_context, request
 import asyncio
 import json
 import argparse
 import time
+# pip3 install quart
+from quart import Quart, render_template, websocket, copy_current_websocket_context, request
 
-# Import the WS2801 module and GPIO
-import RPi.GPIO as GPIO
-import Adafruit_WS2801
-import Adafruit_GPIO.SPI as SPI
-
-# import specific fancy functions
-from ws2801_funcs import *
-
+# colorize output
 OV = '\x1b[0;33m' # verbose
 OR = '\x1b[0;34m' # routine
 OE = '\x1b[1;31m' # error
 OM = '\x1b[0m'    # mischief managed
 
-debuggin = True
+# pip3 install adafruit_ws2801 RPi.GPIO
+try: # because I'd still like this to run outside of a Pi
+  import RPi.GPIO as GPIO
+  import Adafruit_WS2801
+  import Adafruit_GPIO.SPI as SPI
+except Exception as ex: # mock-ups if there's no Pi
+  print(f"{OE}Exception caught: {OR}{ex}{OM}")
+  GPIO = None
+  class Adafruit_WS2801:
+    def __init__(self, pixelCount=200, spi=None, gpio=None):
+      pass
+    def RGB_to_color(r, g, b):
+      pass
+    class WS2801Pixels:
+      def __init__(self, things, **kwargs):
+        pass
+      def clear(whatever):
+        pass
+      def show(whatever):
+        pass
+      def set_pixel(pixnum, color, whatever):
+        pass
+  class SPI:
+    def __init__(self, **kwargs):
+      pass
+    def SpiDev(SPI_PORT, SPI_DEVICE):
+      pass
 
+
+# import specific fancy functions from ws2801_funcs.py
+try: # because this won't work on dev computer
+  from ws2801_funcs import *
+except Exception as ex: # more mock-ups
+  print(f"{OE}Exception caught: {OR}{ex}{OM}")
+  def rainbow_cycle():
+    pass
 
 app = Quart(__name__)
 connected = set()
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-b", "--back2front", help="whether to do the back-to-front pixel stacking (default=False)", action="store_true")
@@ -38,7 +65,7 @@ args = parser.parse_args()
 PIXEL_COUNT = args.pixels
 
 if args.verbosity > 0:
-  print("Running program for {} pixels".format(args.pixels))
+  print(f"{OV}Running program for {OR}{args.pixels}{OV} pixels".format(args.pixels))
 
 # Alternatively specify a hardware SPI connection on /dev/spidev0.0:
 SPI_PORT   = 0
@@ -80,7 +107,7 @@ def collect_websocket(func):
     # when someone connects to /ws, add to inventory of websockets
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        if debuggin: print(f'{OV}entered wrapper(){OM}')
+        # if args.verbosity > 1: print(f'{OV}entered wrapper(){OM}')
         global connected
         connected.add(websocket._get_current_object())
         try:
@@ -92,7 +119,7 @@ def collect_websocket(func):
 
 async def broadcast(message):
     # broadcast a message to all connected websockets
-    if debuggin: print(f'{OV}broadcasting {OR}{message}{OM}')
+    if args.verbosity > 0: print(f'{OV}broadcasting {OR}{message}{OM}')
     for websock in connected:
         await websock.send(message)
 
@@ -101,11 +128,11 @@ async def consumer():
     # what to do with incoming websocket messages
     while True:
         data = await websocket.receive()
-        if debuggin: print(f'{OV}received data {OR}{data}{OM}', end='')
+        if args.verbosity > 0: print(f'{OV}received data {OR}{data}{OM}', end='')
         try:
             dataj = json.loads(data)
             if dataj["Type"] == "Chat": # client is chatting
-                if debuggin: print(f'{OV}, broadcasting as chat {OM}')
+                if args.verbosity > 0: print(f'{OV}, broadcasting as chat {OM}')
                 if dataj["Data"].lower() == "rainbow":
                     rainbow_cycle(pixels)
                     brightness_decrease(pixels)
@@ -124,16 +151,17 @@ async def consumer():
                 r = dataj['Data'][2]
                 g = dataj['Data'][3]
                 b = dataj['Data'][4]
-                # if debuggin: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
+                # if args.verbosity > 0: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
                 pixelState[x][y] = [r,g,b]
                 pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( r, g, b ))
                 pixels.show()
-                if debuggin: print(f'{OV}, broadcasting as pixel {OM}')
+                if args.verbosity > 0: print(f'{OV}, broadcasting as pixel {OM}')
                 await broadcast(f'{{"Type":"Pixel","Data":{dataj["Data"]}}}')
             if dataj["Type"] == "Update": # client wants to know the whole image
+                if args.verbosity > 0: print(f'{OV}, updating board with ROW_LENGTH {OR}{ROW_LENGTH} {OM}')
                 for column, col in zip(pixelState, range(ROW_LENGTH)):
                     for pixel, pix in zip(column, range(COL_LENGTH)):
-                        await broadcast(f'{{"Type":"Pixel","Data":"[{col}, {pix}, {pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]}]"}}')
+                        await broadcast(f'{{"Type":"Pixel","Data":[{col}, {pix}, {pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]}]}}')
         except Exception as ex: # catch exceptions
             print(f'{OE}*** Exception in websocket-quart.py, consumer(): {OR}{ex}{OM}') 
             # return {"Success":False, "Error":f"{inspect.currentframe().f_code.co_name}-Exception: {ex}"}
@@ -143,18 +171,18 @@ async def consumer():
 async def producer():
     # sends sample messages out on a schedule
     while True:
-        if debuggin: print(f'{OV}entered producer(){OM}')
+        if args.verbosity > 1: print(f'{OV}entered producer(){OM}')
         message = f'{{"Type":"System","Data":"I\'m watching"}}'
         await asyncio.sleep(60)
         await websocket.send(message)
-        if debuggin: print(f'{OV}sent message {OR}{message}{OM}')
+        if args.verbosity > 0: print(f'{OV}sent message {OR}{message}{OM}')
 
 
 @app.websocket('/ws')
 # defines what to do when websockets are requested from a client
 @collect_websocket
 async def ws():
-    if debuggin: print(f'{OV}entered ws(){OM}')
+    if args.verbosity > 1: print(f'{OV}entered ws(){OM}')
     await broadcast('{"Type":"System","Data":"Someone connected"}')
     # await broadcast(b'{"Type":"System","Data":"This is a byte string yo!"}')
     consumer_task = asyncio.ensure_future( # copy websocket to consumer()
@@ -165,7 +193,7 @@ async def ws():
     )
     try:
         result = await asyncio.gather(consumer_task, producer_task)
-        if debuggin: print(f'{OV}result is {OR}{result}{OM}')
+        if args.verbosity > 1: print(f'{OV}result is {OR}{result}{OM}')
     finally:
         consumer_task.cancel()
         producer_task.cancel()
@@ -173,7 +201,7 @@ async def ws():
 @app.route('/')
 # defines behavior for clients requesting /
 async def index():
-    if debuggin: print(f'{OV}/ requested via {OR}{request.method}{OM}')
+    if args.verbosity > 0: print(f'{OV}/ requested via {OR}{request.method}{OV}, args.verbosity={OR}{args.verbosity}{OM}')
     width = 10 # manually setting size of grid
     height = 20
     # build a list of x, y values for render to iterate through, e.g. 0,0 through 9,19
