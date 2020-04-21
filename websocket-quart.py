@@ -58,6 +58,7 @@ parser.add_argument("-b", "--back2front", help="whether to do the back-to-front 
 parser.add_argument("-c", "--count", type=int, default=1, help="number of cycles through the program (default=1)")
 parser.add_argument("-f", "--flashes", type=int, default=0, help="number of flashes during cycles (default=0)")
 parser.add_argument("-p", "--pixels", type=int, default=200, help="number of pixels in LED set (default=200)")
+parser.add_argument("-l", "--length", type=int, default=10, help="length of rows/number of columns (default=10)")
 parser.add_argument("-v", "--verbosity", action="count", default=0, help="be more verbose")
 args = parser.parse_args()
 
@@ -75,7 +76,7 @@ pixels = Adafruit_WS2801.WS2801Pixels(PIXEL_COUNT, spi=SPI.SpiDev(SPI_PORT, SPI_
 
 # Define an Y,X tgrid for pixels with 0,0 in the lower left
 # Assumes back and forth layout of LEDs, starting in lower-right
-ROW_LENGTH = 10
+ROW_LENGTH = args.length
 COL_LENGTH = int(PIXEL_COUNT / ROW_LENGTH)
 tgrid = []
 for i in range(int(PIXEL_COUNT / ROW_LENGTH)):

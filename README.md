@@ -29,5 +29,5 @@ For signal, the WS2801 string needs CO connected to SCLCK on the Pi, and DO conn
 
 ## Tools List
 - Multimeter to check connections and voltage
+- [6mm drill bit for through-mounting LEDs](https://smile.amazon.com/gp/product/B0751893Y2)
 - [Knife for cutting Lexan/Plexi/etc](https://smile.amazon.com/gp/product/B000C027ZE)
-
