@@ -1,84 +1,68 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <title>Websocket example</title>
-  <script>
-  function rotate(start){
-    console.log(start);
-    return (start);
-  }
-  </script>
-  <style>
-    .grid {
-      display: grid;
-      grid: repeat({{ height }}, 12vw) / auto-flow;
-    }
-    
-    .row {
-      display: grid;
-      grid: repeat(1, 12vw) / auto-flow;
-    }
-    
-    .row > .cell {
-      margin: 10px;
-      background: rgb(252, 245, 244);
-      margin: 1px;
-    }
-
-    .brush {
-      display: table-cell;
-    }
-    
-    @media (orientation: portrait) {
-      
-      .container {
-        transform: rotate(90deg) translate(35%);
-      }
-        
-      .row > .square {
-        transform: rotate(-90deg);
-      }
-    }
-  </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Wallpretty Animator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <input type="text" id="chatInput">
-    <button id="sendButton">Send</button>
-    <ul></ul>
-    <script src="{{ url_for('static', filename='pixels.js') }}"></script>
-    <div style="display: table;">
-      <div style="display: table-row; height: 60px;">
-        <div class="brush" name="brush" data-active="False" id="whitebrush" style="background-color:rgb(255,255,255);" onclick="brushClick(this)">White</div>
-        <div class="brush" name="brush" data-active="True"  id="redbrush" style="background-color:rgb(255,0,0);" onclick="brushClick(this)">Red</div>
-        <div class="brush" name="brush" data-active="False" id="yellowbrush" style="background-color:rgb(255,255,0);" onclick="brushClick(this)">Yellow</div>
-        <div class="brush" name="brush" data-active="False" id="greenbrush" style="background-color:rgb(0,255,0);" onclick="brushClick(this)">Green</div>
-        <div class="brush" name="brush" data-active="False" id="lybluebrush" style="background-color:rgb(0,255,255);" onclick="brushClick(this)">LtBlue</div>
-        <div class="brush" name="brush" data-active="False" id="bluebrush" style="background-color:rgb(0,0,255);" onclick="brushClick(this)">Blue</div>
-        <div class="brush" name="brush" data-active="False" id="purplebrush" style="background-color:rgb(255,0,255);" onclick="brushClick(this)">Purple</div>
-        <div class="brush" name="brush" data-active="False" id="orangebrush" style="background-color:rgb(255,165,0);" onclick="brushClick(this)">Orange</div>
-        <div class="brush" name="brush" data-active="False" id="brownbrush" style="background-color:rgb(165,42,42);" onclick="brushClick(this)">Brown</div>
-        <div class="brush" name="brush" data-active="False" id="blackbrush" style="background-color:rgb(0,0,0);" onclick="brushClick(this)">Black</div>
-        <div class="colorBox" name="colorBox" id=""><input name="redBox" id="redBox" type="text" size="3">Red  </div>
-        <div class="colorBox" name="colorBox" id=""><input name="greenBox" id="greenBox" type="text" size="3">Green</div>
-        <div class="colorBox" name="colorBox" id=""><input name="blueBox" id="blueBox" type="text" size="3">Blue </div>
-      </div>
-    </div>
-    <div class="frames">
-      <div class="button" name="frameLeft" id="frameLeft" onclick="goLeft()">⬅️</div>
-      <input type="text" id="frameNum" value="0">
-      <div class="button" name="frameRight" id="frameRight" onclick="goRight()">➡️</div>
-      <button id="loadButton" onclick="loadFrame()">Load</button>
-      <button id="saveButton" onclick="saveFrame()">Save</button>
-      <button id="animateButton" onclick="animate()">Animate</button>
-    </div>
-    <div class="grid">
-      {% for y in ys %}
-        <div class="row">
-          {% for x in xs %}
-          <div class="cell" onclick="clickCell(this)" style="background-color:rgb(0,0,0);" data-x="{{ x }}" data-y="{{ y }}">{{ x }},{{ y }}</div>
+    <main class="app">
+      <header class="chat-panel" aria-label="Chat controls">
+        <input type="text" id="chatInput" placeholder="Send a message" autocomplete="off">
+        <button id="sendButton" type="button">Send</button>
+      </header>
+      <ul class="chat-log" aria-live="polite"></ul>
+
+      <section class="toolbar" aria-label="Brush controls">
+        <div class="palette" role="list" aria-label="Preset brushes">
+          <div class="brush" role="button" tabindex="0" data-active="False" id="whitebrush" style="background-color:rgb(255,255,255);" onclick="brushClick(this)">White</div>
+          <div class="brush" role="button" tabindex="0" data-active="True"  id="redbrush" style="background-color:rgb(255,0,0);" onclick="brushClick(this)">Red</div>
+          <div class="brush" role="button" tabindex="0" data-active="False" id="yellowbrush" style="background-color:rgb(255,255,0);" onclick="brushClick(this)">Yellow</div>
+          <div class="brush" role="button" tabindex="0" data-active="False" id="greenbrush" style="background-color:rgb(0,255,0);" onclick="brushClick(this)">Green</div>
+          <div class="brush" role="button" tabindex="0" data-active="False" id="lybluebrush" style="background-color:rgb(0,255,255);" onclick="brushClick(this)">LtBlue</div>
+          <div class="brush" role="button" tabindex="0" data-active="False" id="bluebrush" style="background-color:rgb(0,0,255);" onclick="brushClick(this)">Blue</div>
+          <div class="brush" role="button" tabindex="0" data-active="False" id="purplebrush" style="background-color:rgb(255,0,255);" onclick="brushClick(this)">Purple</div>
+          <div class="brush" role="button" tabindex="0" data-active="False" id="orangebrush" style="background-color:rgb(255,165,0);" onclick="brushClick(this)">Orange</div>
+          <div class="brush" role="button" tabindex="0" data-active="False" id="brownbrush" style="background-color:rgb(165,42,42);" onclick="brushClick(this)">Brown</div>
+          <div class="brush" role="button" tabindex="0" data-active="False" id="blackbrush" style="background-color:rgb(0,0,0);" onclick="brushClick(this)">Black</div>
+        </div>
+        <div class="rgb-controls" aria-label="Custom RGB sliders">
+          <label for="redBox">R
+            <input name="redBox" id="redBox" type="number" min="0" max="255" value="0">
+          </label>
+          <label for="greenBox">G
+            <input name="greenBox" id="greenBox" type="number" min="0" max="255" value="0">
+          </label>
+          <label for="blueBox">B
+            <input name="blueBox" id="blueBox" type="number" min="0" max="255" value="0">
+          </label>
+        </div>
+        <div class="animation-controls" aria-label="Animation controls">
+          <div class="frame-scrub">
+            <button type="button" class="frame-nav" name="frameLeft" id="frameLeft" onclick="goLeft()" aria-label="Previous frame">⬅️</button>
+            <input type="number" id="frameNum" value="0" aria-label="Current frame">
+            <button type="button" class="frame-nav" name="frameRight" id="frameRight" onclick="goRight()" aria-label="Next frame">➡️</button>
+          </div>
+          <div class="frame-actions">
+            <button id="loadButton" type="button" onclick="loadFrame()">Load</button>
+            <button id="saveButton" type="button" onclick="saveFrame()">Save</button>
+            <button id="animateButton" type="button" onclick="animate()">Animate</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="board-wrapper" aria-label="Lightboard grid">
+        <div id="lightboard" class="grid" role="grid" aria-label="10 by 20 lightboard" style="--board-width: {{ xs|length }}; --board-height: {{ ys|length }};">
+          {% for y in ys %}
+            {% for x in xs %}
+              <div class="cell" role="gridcell" tabindex="0" data-x="{{ x }}" data-y="{{ y }}" data-coord="{{ x }}-{{ y }}" aria-label="Pixel {{ x }}, {{ y }}"></div>
+            {% endfor %}
           {% endfor %}
         </div>
-      {% endfor %}
-    </div>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='pixels.js') }}"></script>
   </body>
 </html>

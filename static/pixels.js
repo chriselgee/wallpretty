@@ -1,95 +1,286 @@
-const reader = new FileReader();
-reader.addEventListener('loadend', (e) => {
-  const text = e.srcElement.result;
-  console.log(text);
-});
-var ws = new WebSocket('ws://' + document.domain + ':' + location.port + '/ws');
-//var ws = new WebSocket('ws://' + document.domain + ':' + location.port + '/api/v2/ws');
-ws.onmessage = function (event) {
-  console.log("Incoming ws: " + event.data);
-  var incoming = JSON.parse(event.data);
-  if (incoming.Type == "Chat"){ // handle chat messages
-    var messages_dom = document.getElementsByTagName('ul')[0];
-    var message_dom = document.createElement('li');
-    var content_dom = document.createTextNode('Received: ' + incoming.Data);
-    message_dom.appendChild(content_dom);
-    messages_dom.appendChild(message_dom);
+let ws = null;
+let isPainting = false;
+const paintedCells = new Set();
+const coordToCell = new Map();
+const animationName = "anim1";
+
+const clampColorValue = (value) => {
+  const numeric = parseInt(value, 10);
+  if (Number.isNaN(numeric)) {
+    return 0;
   }
-  if (incoming.Type == "Pixel"){ // handle incoming pixel changes
-    var cells = document.getElementsByClassName("cell");
-    console.log("Trying to change a pixel; incoming.Data looks like " + incoming.Data);
-    // Data looks like "[1, 2, 255, 0, 0]" for "[x, y, r, g, b]"
-    var targetx = incoming.Data[0];
-    var targety = incoming.Data[1];
-    var targetr = incoming.Data[2];
-    var targetg = incoming.Data[3];
-    var targetb = incoming.Data[4];
-    var targetcolor = "rgb(" + targetr + ', ' + targetg + ', ' + targetb + ")" // e.g. "rgb(255, 0, 0)"
-    console.log("X is "+targetx+", Y is "+targety+", and color = "+targetcolor)
-    for (i = 0; i < cells.length; i++) {
-      // console.log("i is " + i + ", and incoming.Data[0] is " + incoming.Data[0] + " and cells[i].dataset.x is " + cells[i].dataset.x)
-      if (targetx == cells[i].dataset.x && targety == cells[i].dataset.y) {
-        cells[i].style.backgroundColor = targetcolor;
-      }
+  return Math.min(255, Math.max(0, numeric));
+};
+
+const getCurrentColor = () => {
+  const rInput = document.getElementById('redBox');
+  const gInput = document.getElementById('greenBox');
+  const bInput = document.getElementById('blueBox');
+  const r = clampColorValue(rInput ? rInput.value : 0);
+  const g = clampColorValue(gInput ? gInput.value : 0);
+  const b = clampColorValue(bInput ? bInput.value : 0);
+  return {
+    r,
+    g,
+    b,
+    css: `rgb(${r}, ${g}, ${b})`
+  };
+};
+
+const keyFromCell = (cell) => {
+  if (!cell) {
+    return null;
+  }
+  if (!cell.dataset.coord) {
+    cell.dataset.coord = `${cell.dataset.x}-${cell.dataset.y}`;
+  }
+  return cell.dataset.coord;
+};
+
+const safeSend = (payload) => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  }
+};
+
+function clickCell(cell) {
+  if (!cell) {
+    return;
+  }
+  const color = getCurrentColor();
+  cell.style.backgroundColor = color.css;
+  safeSend({
+    Type: 'Pixel',
+    Data: [Number(cell.dataset.x), Number(cell.dataset.y), color.r, color.g, color.b]
+  });
+}
+
+function brushClick(brush) {
+  const brushes = document.getElementsByClassName('brush');
+  Array.from(brushes).forEach((b) => {
+    b.dataset.active = 'False';
+  });
+  brush.dataset.active = 'True';
+  const colorBlob = brush.style.backgroundColor.match(/\d+/g) || ['0', '0', '0'];
+  const [r, g, b] = colorBlob.map((value) => clampColorValue(value));
+  const redInput = document.getElementById('redBox');
+  const greenInput = document.getElementById('greenBox');
+  const blueInput = document.getElementById('blueBox');
+  if (redInput) redInput.value = r;
+  if (greenInput) greenInput.value = g;
+  if (blueInput) blueInput.value = b;
+}
+
+const appendChat = (message) => {
+  const chatLog = document.querySelector('.chat-log');
+  if (!chatLog) {
+    return;
+  }
+  const item = document.createElement('li');
+  item.textContent = `Received: ${message}`;
+  chatLog.appendChild(item);
+  chatLog.scrollTop = chatLog.scrollHeight;
+};
+
+const handlePixelMessage = (data) => {
+  const [x, y, r, g, b] = data;
+  const key = `${x}-${y}`;
+  const cell = coordToCell.get(key);
+  if (cell) {
+    cell.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+  }
+};
+
+const handleSocketMessage = (event) => {
+  let incoming;
+  try {
+    incoming = JSON.parse(event.data);
+  } catch (error) {
+    console.error('Failed to parse message', event.data);
+    return;
+  }
+  switch (incoming.Type) {
+    case 'Chat':
+      appendChat(incoming.Data);
+      break;
+    case 'Pixel':
+      handlePixelMessage(incoming.Data);
+      break;
+    case 'System':
+      console.log('System message:', incoming.Data);
+      break;
+    default:
+      console.log('Unhandled message type:', incoming);
+      break;
+  }
+};
+
+const setupChat = () => {
+  const button = document.getElementById('sendButton');
+  const input = document.getElementById('chatInput');
+  if (!button || !input) {
+    return;
+  }
+  const sendMessage = () => {
+    const content = input.value.trim();
+    if (!content) {
+      return;
     }
+    safeSend({ Type: 'Chat', Data: content });
+    input.value = '';
+  };
+  button.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      sendMessage();
+    }
+  });
+};
+
+const paintIfNeeded = (cell) => {
+  const key = keyFromCell(cell);
+  if (!key || paintedCells.has(key)) {
+    return;
   }
-  if (incoming.Type == "System") { //handles system messages
-    console.log("Received system message: " + incoming.Data);
+  paintedCells.add(key);
+  clickCell(cell);
+};
+
+const handlePointerDown = (event) => {
+  if (event.pointerType === 'mouse' && event.button !== 0) {
+    return;
+  }
+  event.preventDefault();
+  paintedCells.clear();
+  isPainting = true;
+  paintIfNeeded(event.currentTarget);
+};
+
+const handlePointerEnter = (event) => {
+  if (!isPainting) {
+    return;
+  }
+  event.preventDefault();
+  paintIfNeeded(event.currentTarget);
+};
+
+const stopPainting = () => {
+  if (!isPainting) {
+    return;
+  }
+  isPainting = false;
+  paintedCells.clear();
+};
+
+const handleCellKeyDown = (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    clickCell(event.currentTarget);
   }
 };
-var button = document.getElementById('sendButton');
-button.onclick = function() {
-  var content = document.getElementById('chatInput').value;
-  ws.send('{"Type":"Chat","Data":"' + content + '"}');
+
+const setupCells = () => {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell) => {
+    const key = keyFromCell(cell);
+    coordToCell.set(key, cell);
+    cell.addEventListener('pointerdown', handlePointerDown);
+    cell.addEventListener('pointerenter', handlePointerEnter);
+    cell.addEventListener('keydown', handleCellKeyDown);
+  });
+  window.addEventListener('pointerup', stopPainting);
+  window.addEventListener('pointercancel', stopPainting);
+  window.addEventListener('pointerleave', stopPainting);
 };
-function clickCell(cell) { // change a cell's color when clicked
-  var r = document.getElementById('redBox').value
-  var g = document.getElementById('greenBox').value
-  var b = document.getElementById('blueBox').value
-  var color = r+", "+g+", "+b
-  // cell.style.backgroundColor = color; // change cell color on page
-  console.log("Setting cell " + cell.dataset.x + ", " + cell.dataset.y + " to " + color); // log change to console
-  ws.send('{"Type":"Pixel","Data":[' + cell.dataset.x + ', ' + cell.dataset.y + ', ' + r+', '+g+', '+b + ']}') // ws message back to server to change cell in device
-  return;
-}
-function brushClick(brush) { // change the brush color when clicked
-  brushes = document.getElementsByClassName("brush");
-  for (var i = 0; i < brushes.length; i++) {
-    // console.log("Current brushes["+i+"].dataset.active == " + brushes[i].dataset.active);
-    brushes[i].dataset.active = "False";
+
+const initWebSocket = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${protocol}://${window.location.host}/ws`;
+  ws = new WebSocket(wsUrl);
+  ws.addEventListener('message', handleSocketMessage);
+  ws.addEventListener('open', () => {
+    console.log('Requesting initial board state');
+    safeSend({ Type: 'Update' });
+  });
+  ws.addEventListener('close', () => {
+    console.warn('WebSocket connection closed');
+  });
+};
+
+function goLeft() {
+  const frameInput = document.getElementById('frameNum');
+  if (!frameInput) {
+    return;
   }
-  brush.dataset.active = "True";
-  console.log("The " + brush.style.backgroundColor + " brush is now active")
-  colorBlob = brush.style.backgroundColor.split('(')[1].split(')')[0].split(',') // like [255, 0, 0]
-  document.getElementById("redBox").value = colorBlob[0]
-  document.getElementById("greenBox").value = colorBlob[1]
-  document.getElementById("blueBox").value = colorBlob[2]
+  const currentFrame = Math.max(0, (parseInt(frameInput.value, 10) || 0) - 1);
+  frameInput.value = currentFrame;
 }
-var animationName = "anim1";
-function goLeft() { // go one frame earlier
-  var currentFrame = document.getElementById("frameNum").value;
-  if (currentFrame != 0) {
-    currentFrame = currentFrame - 1;
+
+function goRight() {
+  const frameInput = document.getElementById('frameNum');
+  if (!frameInput) {
+    return;
   }
-  document.getElementById("frameNum").value = currentFrame;
+  const currentFrame = (parseInt(frameInput.value, 10) || 0) + 1;
+  frameInput.value = currentFrame;
 }
-function goRight() { // go one frame later
-  var currentFrame = document.getElementById("frameNum").value;
-  currentFrame = currentFrame + 1;
-  document.getElementById("frameNum").value = currentFrame;
+
+function loadFrame() {
+  const frameInput = document.getElementById('frameNum');
+  if (!frameInput) {
+    return;
+  }
+  const currentFrame = parseInt(frameInput.value, 10) || 0;
+  safeSend({ Type: 'LoadFrame', Data: [animationName, currentFrame] });
 }
-function loadFrame() { // load whatever's in the DB for this frame number into the pixels
-  var currentFrame = document.getElementById("frameNum").value;
-  ws.send('{"Type":"LoadFrame","Data":[' + animationName + ', ' + currentFrame + ']}') // ws to server to overwrite current state with DB frame
+
+function saveFrame() {
+  const frameInput = document.getElementById('frameNum');
+  if (!frameInput) {
+    return;
+  }
+  const currentFrame = parseInt(frameInput.value, 10) || 0;
+  safeSend({ Type: 'SaveFrame', Data: [animationName, currentFrame] });
 }
-function saveFrame() { // save current pixels to frame shown in box
-  var currentFrame = document.getElementById("frameNum").value;
-  ws.send('{"Type":"SaveFrame","Data":[' + animationName + ', ' + currentFrame + ']}') // ws to server to save current frame
+
+function animate() {
+  const frameInput = document.getElementById('frameNum');
+  if (!frameInput) {
+    return;
+  }
+  const currentFrame = parseInt(frameInput.value, 10) || 0;
+  safeSend({ Type: 'Animate', Data: [animationName, currentFrame] });
 }
-function animate() { // animate given current set of frames
-  ws.send('{"Type":"Animate","Data":[' + animationName + ', ' + currentFrame + ']}') // ws to request animation
-}
-console.log("Asking for initial board setup");
-ws.onopen = function (event) {
-  ws.send('{"Type":"Update"}'); // ws message back to server to get initial state of board    
+
+const enhanceBrushAccessibility = () => {
+  const brushes = document.querySelectorAll('.brush');
+  brushes.forEach((brush) => {
+    brush.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        brushClick(brush);
+      }
+    });
+  });
+};
+
+const primeDefaultBrush = () => {
+  const current = document.querySelector('.brush[data-active="True"]') || document.querySelector('.brush');
+  if (current) {
+    brushClick(current);
+  }
+};
+
+const init = () => {
+  setupCells();
+  setupChat();
+  enhanceBrushAccessibility();
+  primeDefaultBrush();
+  initWebSocket();
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
 }
