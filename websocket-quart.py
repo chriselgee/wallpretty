@@ -303,20 +303,6 @@ async def index():
             ys += [(height - i - 1),]
     return await render_template('index.html', xs=xs, ys=ys, height=height)
 
-@app.route('/animate')
-# defines behavior for clients requesting /animate
-async def animate():
-    if args.verbosity > 0: print(f'{OV}/ requested via {OR}{request.method}{OV}, args.verbosity={OR}{args.verbosity}{OM}')
-    width = 10 # manually setting size of grid
-    height = 20
-    # build a list of x, y values for render to iterate through, e.g. 0,0 through 9,19
-    xs, ys = [], []
-    for i in range(width):
-            xs += [i,]
-    for i in range(height):
-            ys += [(height - i - 1),]
-    return await render_template('animate.html', xs=xs, ys=ys, height=height)
-
 if __name__ == '__main__':
     pixels.clear()
     pixels.show()
