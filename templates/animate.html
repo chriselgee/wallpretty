@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Wallpretty Lightboard</title>
+    <title>Wallpretty Animator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
@@ -37,6 +37,18 @@
           <label for="blueBox">B
             <input name="blueBox" id="blueBox" type="number" min="0" max="255" value="0">
           </label>
+        </div>
+        <div class="animation-controls" aria-label="Animation controls">
+          <div class="frame-scrub">
+            <button type="button" class="frame-nav" name="frameLeft" id="frameLeft" onclick="goLeft()" aria-label="Previous frame">⬅️</button>
+            <input type="number" id="frameNum" value="0" aria-label="Current frame">
+            <button type="button" class="frame-nav" name="frameRight" id="frameRight" onclick="goRight()" aria-label="Next frame">➡️</button>
+          </div>
+          <div class="frame-actions">
+            <button id="loadButton" type="button" onclick="loadFrame()">Load</button>
+            <button id="saveButton" type="button" onclick="saveFrame()">Save</button>
+            <button id="animateButton" type="button" onclick="animate()">Animate</button>
+          </div>
         </div>
       </section>
 

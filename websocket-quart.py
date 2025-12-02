@@ -6,6 +6,7 @@ import argparse
 import time
 # pip3 install quart
 from quart import Quart, render_template, websocket, copy_current_websocket_context, request
+from pklite import save_frame, load_frame
 
 # colorize output
 OV = '\x1b[0;33m' # verbose
@@ -127,6 +128,8 @@ async def broadcast(message):
 
 async def consumer():
     # what to do with incoming websocket messages
+    global pixelState
+    global pgrid
     while True:
         data = await websocket.receive()
         if args.verbosity > 0: print(f'{OV}received data {OR}{data}{OM}', end='')
@@ -163,6 +166,18 @@ async def consumer():
                 for column, col in zip(pixelState, range(ROW_LENGTH)):
                     for pixel, pix in zip(column, range(COL_LENGTH)):
                         await broadcast(f'{{"Type":"Pixel","Data":[{col}, {pix}, {pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]}]}}')
+            if dataj["Type"] == "SaveFrame": # client wants to store a frame
+                if args.verbosity > 0: print(f'{OV}, storing a frame {OM}')
+                save_frame(table_name=data[0], frame=data[1], pixels=pixelState) # first data piece is animation name, second is frame number
+            if dataj["Type"] == "LoadFrame": # client wants to load an animation frame
+                if args.verbosity > 0: print(f'{OV}, loading a frame {OM}')
+                pixelSet = load_frame(table_name=data[0], frame=data[1]) # first data piece is animation name, second is frame number
+                pixelState = pixelSet
+                for column, col in zip(pixelState, range(ROW_LENGTH)):
+                    for pixel, pix in zip(column, range(COL_LENGTH)):
+                        pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( pixelState[col][pix][0], pixelState[col][pix][1], pixelState[col][pix][2] ))
+                        await broadcast(f'{{"Type":"Pixel","Data":[{col}, {pix}, {pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]}]}}')
+                pixels.show()
         except Exception as ex: # catch exceptions
             print(f'{OE}*** Exception in websocket-quart.py, consumer(): {OR}{ex}{OM}') 
             # return {"Success":False, "Error":f"{inspect.currentframe().f_code.co_name}-Exception: {ex}"}
@@ -212,6 +227,20 @@ async def index():
     for i in range(height):
             ys += [(height - i - 1),]
     return await render_template('index.html', xs=xs, ys=ys, height=height)
+
+@app.route('/animate')
+# defines behavior for clients requesting /animate
+async def animate():
+    if args.verbosity > 0: print(f'{OV}/ requested via {OR}{request.method}{OV}, args.verbosity={OR}{args.verbosity}{OM}')
+    width = 10 # manually setting size of grid
+    height = 20
+    # build a list of x, y values for render to iterate through, e.g. 0,0 through 9,19
+    xs, ys = [], []
+    for i in range(width):
+            xs += [i,]
+    for i in range(height):
+            ys += [(height - i - 1),]
+    return await render_template('animate.html', xs=xs, ys=ys, height=height)
 
 if __name__ == '__main__':
     pixels.clear()
