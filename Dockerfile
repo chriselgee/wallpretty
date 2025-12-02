@@ -1,27 +1,23 @@
-#Docker image for testing self-destruct
-# docker build --force-rm -t wallpretty . && docker run --rm -it -p5000:5000 -e "width=10" wallpretty
-FROM python:3.7
-MAINTAINER "Chris Elgee"
+FROM python:3.11-slim
+LABEL maintainer="Chris Elgee"
 
-RUN apt-get update
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-apt-get -y --no-install-recommends install \
-python3-pip
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-RUN python3 -m pip install quart RPi.GPIO adafruit-ws2801
+RUN apt-get update && \
+	apt-get install -y --no-install-recommends build-essential && \
+	rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m dockwiz
+WORKDIR /app
+COPY requirements.txt ./
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+	python3 -m pip install --no-cache-dir -r requirements.txt
 
-RUN pwd
-RUN ls -l /home/
+COPY . .
 
-COPY *py /home/dockwiz/
-RUN mkdir /home/dockwiz/templates/
-COPY templates/index.html /home/dockwiz/templates/
+RUN groupadd -r wallpretty && useradd --no-log-init --system -r -g wallpretty wallpretty && \
+	chown -R wallpretty:wallpretty /app
 
-RUN chown -R dockwiz: /home/dockwiz/
+USER wallpretty
 
-USER dockwiz
-WORKDIR /home/dockwiz/
-
-CMD ["python3","./websocket-quart.py"]
+CMD ["python3", "websocket-quart.py"]
