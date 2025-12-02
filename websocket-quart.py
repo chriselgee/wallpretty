@@ -10,6 +10,13 @@ import re
 # pip3 install quart
 from quart import Quart, render_template, websocket, copy_current_websocket_context, request
 
+# grab PORT from environment if set
+import os
+if "PORT" in os.environ:
+    port = int(os.environ["PORT"])
+else:
+    port = 5000
+
 # colorize output
 OV = '\x1b[0;33m' # verbose
 OR = '\x1b[0;34m' # routine
@@ -306,4 +313,4 @@ async def index():
 if __name__ == '__main__':
     pixels.clear()
     pixels.show()
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=port)
