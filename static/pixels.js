@@ -2,7 +2,7 @@ let ws = null;
 let isPainting = false;
 const paintedCells = new Set();
 const coordToCell = new Map();
-const animationName = "anim1";
+let savedStates = [];
 
 const clampColorValue = (value) => {
   const numeric = parseInt(value, 10);
@@ -41,6 +41,205 @@ const safeSend = (payload) => {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(payload));
   }
+};
+
+const setSaveStatus = (message, state = 'info') => {
+  const status = document.getElementById('saveStatus');
+  if (!status) {
+    return;
+  }
+  status.textContent = message || '';
+  status.dataset.state = state;
+};
+
+const populateSavedStates = (states) => {
+  const select = document.getElementById('savedStateSelect');
+  if (!select) {
+    return;
+  }
+  const previousValue = select.value;
+  select.innerHTML = '';
+  if (!states.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.disabled = true;
+    option.selected = true;
+    option.textContent = 'No saved states yet';
+    select.appendChild(option);
+    return;
+  }
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.disabled = true;
+  placeholder.selected = !states.some((state) => state.slug === previousValue);
+  placeholder.textContent = 'Select a saved state';
+  select.appendChild(placeholder);
+  states.forEach((state) => {
+    const option = document.createElement('option');
+    option.value = state.slug;
+    option.textContent = state.name || state.slug;
+    option.dataset.savedAt = state.saved_at || '';
+    select.appendChild(option);
+  });
+  if (previousValue && states.some((state) => state.slug === previousValue)) {
+    select.value = previousValue;
+  }
+};
+
+const fetchSavedStates = async () => {
+  try {
+    const response = await fetch('/api/saves');
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (error) {
+      payload = {};
+    }
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to load saved states.');
+    }
+    savedStates = Array.isArray(payload.saves) ? payload.saves : [];
+    populateSavedStates(savedStates);
+    if (savedStates.length) {
+      setSaveStatus(`Loaded ${savedStates.length} saved state${savedStates.length === 1 ? '' : 's'}.`, 'success');
+    } else {
+      setSaveStatus('No saved states yet.', 'info');
+    }
+  } catch (error) {
+    console.error('Failed to load saved states', error);
+    setSaveStatus(error.message || 'Unable to load saved states.', 'error');
+  }
+};
+
+const handleSaveSnapshot = async () => {
+  const input = document.getElementById('saveNameInput');
+  if (!input) {
+    return;
+  }
+  const rawName = input.value.trim();
+  if (!rawName) {
+    setSaveStatus('Enter a name before saving.', 'error');
+    input.focus();
+    return;
+  }
+  setSaveStatus('Saving current board...', 'info');
+  try {
+    const response = await fetch('/api/saves', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ name: rawName })
+    });
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (error) {
+      payload = {};
+    }
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to save board state.');
+    }
+    input.value = '';
+    const savedName = (payload.save && payload.save.name) || rawName;
+    setSaveStatus(`Saved "${savedName}" successfully.`, 'success');
+    await fetchSavedStates();
+    const select = document.getElementById('savedStateSelect');
+    if (select && payload.save && payload.save.slug) {
+      select.value = payload.save.slug;
+    }
+  } catch (error) {
+    console.error('Failed to save board state', error);
+    setSaveStatus(error.message || 'Unable to save board state.', 'error');
+  }
+};
+
+const applySavedPixels = (pixels) => {
+  if (!Array.isArray(pixels)) {
+    throw new Error('Saved pixel data is invalid.');
+  }
+  let updates = 0;
+  for (let x = 0; x < pixels.length; x += 1) {
+    const column = pixels[x];
+    if (!Array.isArray(column)) {
+      continue;
+    }
+    for (let y = 0; y < column.length; y += 1) {
+      const triple = column[y];
+      if (!Array.isArray(triple) || triple.length < 3) {
+        continue;
+      }
+      const [r, g, b] = triple.map((value) => clampColorValue(value));
+      const cell = coordToCell.get(`${x}-${y}`);
+      if (cell) {
+        cell.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+      }
+      safeSend({ Type: 'Pixel', Data: [x, y, r, g, b] });
+      updates += 1;
+    }
+  }
+  return updates;
+};
+
+const handleLoadSnapshot = async () => {
+  const select = document.getElementById('savedStateSelect');
+  if (!select) {
+    return;
+  }
+  const slug = select.value;
+  if (!slug) {
+    setSaveStatus('Select a saved state to load.', 'error');
+    return;
+  }
+  setSaveStatus('Loading saved state...', 'info');
+  try {
+    const response = await fetch(`/api/saves/${encodeURIComponent(slug)}`);
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (error) {
+      payload = {};
+    }
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to load saved state.');
+    }
+    if (!Array.isArray(payload.pixels)) {
+      throw new Error('Saved file is missing pixel data.');
+    }
+    const updates = applySavedPixels(payload.pixels);
+    const label = payload.name || slug;
+    setSaveStatus(`Loaded ${label} (${updates} pixels).`, 'success');
+  } catch (error) {
+    console.error('Failed to load saved state', error);
+    setSaveStatus(error.message || 'Unable to load saved state.', 'error');
+  }
+};
+
+const setupSaveRestore = () => {
+  const saveButton = document.getElementById('saveSnapshotButton');
+  if (saveButton) {
+    saveButton.addEventListener('click', handleSaveSnapshot);
+  }
+  const loadButton = document.getElementById('loadSnapshotButton');
+  if (loadButton) {
+    loadButton.addEventListener('click', handleLoadSnapshot);
+  }
+  const refreshButton = document.getElementById('refreshSavesButton');
+  if (refreshButton) {
+    refreshButton.addEventListener('click', () => {
+      fetchSavedStates();
+    });
+  }
+  const input = document.getElementById('saveNameInput');
+  if (input) {
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        handleSaveSnapshot();
+      }
+    });
+  }
+  fetchSavedStates();
 };
 
 function clickCell(cell) {
@@ -207,51 +406,6 @@ const initWebSocket = () => {
   });
 };
 
-function goLeft() {
-  const frameInput = document.getElementById('frameNum');
-  if (!frameInput) {
-    return;
-  }
-  const currentFrame = Math.max(0, (parseInt(frameInput.value, 10) || 0) - 1);
-  frameInput.value = currentFrame;
-}
-
-function goRight() {
-  const frameInput = document.getElementById('frameNum');
-  if (!frameInput) {
-    return;
-  }
-  const currentFrame = (parseInt(frameInput.value, 10) || 0) + 1;
-  frameInput.value = currentFrame;
-}
-
-function loadFrame() {
-  const frameInput = document.getElementById('frameNum');
-  if (!frameInput) {
-    return;
-  }
-  const currentFrame = parseInt(frameInput.value, 10) || 0;
-  safeSend({ Type: 'LoadFrame', Data: [animationName, currentFrame] });
-}
-
-function saveFrame() {
-  const frameInput = document.getElementById('frameNum');
-  if (!frameInput) {
-    return;
-  }
-  const currentFrame = parseInt(frameInput.value, 10) || 0;
-  safeSend({ Type: 'SaveFrame', Data: [animationName, currentFrame] });
-}
-
-function animate() {
-  const frameInput = document.getElementById('frameNum');
-  if (!frameInput) {
-    return;
-  }
-  const currentFrame = parseInt(frameInput.value, 10) || 0;
-  safeSend({ Type: 'Animate', Data: [animationName, currentFrame] });
-}
-
 const enhanceBrushAccessibility = () => {
   const brushes = document.querySelectorAll('.brush');
   brushes.forEach((brush) => {
@@ -274,6 +428,7 @@ const primeDefaultBrush = () => {
 const init = () => {
   setupCells();
   setupChat();
+  setupSaveRestore();
   enhanceBrushAccessibility();
   primeDefaultBrush();
   initWebSocket();

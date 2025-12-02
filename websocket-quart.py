@@ -3,10 +3,12 @@ from functools import wraps
 import asyncio
 import json
 import argparse
-import time
+from datetime import datetime, timezone
+from pathlib import Path
+import copy
+import re
 # pip3 install quart
 from quart import Quart, render_template, websocket, copy_current_websocket_context, request
-from pklite import save_frame, load_frame
 
 # colorize output
 OV = '\x1b[0;33m' # verbose
@@ -105,6 +107,26 @@ for column in pgrid:
         row.append([0,0,0])
     pixelState.append(row)
 
+SAVE_DIR = Path(__file__).resolve().parent / "saves"
+SAVE_DIR.mkdir(parents=True, exist_ok=True)
+SAVE_NAME_PATTERN = re.compile(r"[^a-zA-Z0-9_-]+")
+
+
+def sanitize_save_name(raw_name):
+    if not isinstance(raw_name, str):
+        raise ValueError("Save name must be a string.")
+    trimmed = raw_name.strip()
+    if not trimmed:
+        raise ValueError("Save name cannot be empty.")
+    sanitized = SAVE_NAME_PATTERN.sub('-', trimmed.lower()).strip('-')
+    if not sanitized:
+        raise ValueError("Save name must include letters, numbers, underscores, or dashes.")
+    return sanitized[:64]
+
+
+def snapshot_pixel_state():
+    return copy.deepcopy(pixelState)
+
 def collect_websocket(func):
     # when someone connects to /ws, add to inventory of websockets
     @wraps(func)
@@ -166,18 +188,6 @@ async def consumer():
                 for column, col in zip(pixelState, range(ROW_LENGTH)):
                     for pixel, pix in zip(column, range(COL_LENGTH)):
                         await broadcast(f'{{"Type":"Pixel","Data":[{col}, {pix}, {pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]}]}}')
-            if dataj["Type"] == "SaveFrame": # client wants to store a frame
-                if args.verbosity > 0: print(f'{OV}, storing a frame {OM}')
-                save_frame(table_name=data[0], frame=data[1], pixels=pixelState) # first data piece is animation name, second is frame number
-            if dataj["Type"] == "LoadFrame": # client wants to load an animation frame
-                if args.verbosity > 0: print(f'{OV}, loading a frame {OM}')
-                pixelSet = load_frame(table_name=data[0], frame=data[1]) # first data piece is animation name, second is frame number
-                pixelState = pixelSet
-                for column, col in zip(pixelState, range(ROW_LENGTH)):
-                    for pixel, pix in zip(column, range(COL_LENGTH)):
-                        pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( pixelState[col][pix][0], pixelState[col][pix][1], pixelState[col][pix][2] ))
-                        await broadcast(f'{{"Type":"Pixel","Data":[{col}, {pix}, {pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]}]}}')
-                pixels.show()
         except Exception as ex: # catch exceptions
             print(f'{OE}*** Exception in websocket-quart.py, consumer(): {OR}{ex}{OM}') 
             # return {"Success":False, "Error":f"{inspect.currentframe().f_code.co_name}-Exception: {ex}"}
@@ -192,6 +202,71 @@ async def producer():
         await asyncio.sleep(60)
         await websocket.send(message)
         if args.verbosity > 0: print(f'{OV}sent message {OR}{message}{OM}')
+
+@app.route('/api/saves', methods=['GET'])
+async def list_saved_states():
+    saves = []
+    for path in sorted(SAVE_DIR.glob('*.json')):
+        try:
+            with path.open('r', encoding='utf-8') as fp:
+                payload = json.load(fp)
+        except (OSError, json.JSONDecodeError):
+            continue
+        saves.append({
+            "name": payload.get("name", path.stem),
+            "slug": payload.get("slug", path.stem),
+            "saved_at": payload.get("saved_at"),
+            "width": payload.get("width", ROW_LENGTH),
+            "height": payload.get("height", COL_LENGTH),
+        })
+    return {"saves": saves}
+
+
+@app.route('/api/saves', methods=['POST'])
+async def save_current_board():
+    try:
+        payload = await request.get_json()
+    except Exception:
+        payload = None
+    if not payload or 'name' not in payload:
+        return {"error": "A save name is required."}, 400
+    display_name = payload['name'].strip()
+    try:
+        slug = sanitize_save_name(display_name)
+    except ValueError as exc:
+        return {"error": str(exc)}, 400
+    record = {
+        "name": display_name,
+        "slug": slug,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
+        "width": ROW_LENGTH,
+        "height": COL_LENGTH,
+        "pixels": snapshot_pixel_state(),
+    }
+    save_path = SAVE_DIR / f"{slug}.json"
+    try:
+        with save_path.open('w', encoding='utf-8') as fp:
+            json.dump(record, fp)
+    except OSError as exc:
+        return {"error": f"Unable to write save '{display_name}': {exc}"}, 500
+    return {"save": {k: record[k] for k in ("name", "slug", "saved_at", "width", "height")}}
+
+
+@app.route('/api/saves/<string:save_slug>', methods=['GET'])
+async def load_saved_board(save_slug):
+    try:
+        slug = sanitize_save_name(save_slug)
+    except ValueError:
+        return {"error": "Save not found."}, 404
+    save_path = SAVE_DIR / f"{slug}.json"
+    if not save_path.exists():
+        return {"error": "Save not found."}, 404
+    try:
+        with save_path.open('r', encoding='utf-8') as fp:
+            payload = json.load(fp)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"error": f"Unable to read save '{slug}': {exc}"}, 500
+    return payload
 
 
 @app.websocket('/ws')

@@ -38,17 +38,25 @@
             <input name="blueBox" id="blueBox" type="number" min="0" max="255" value="0">
           </label>
         </div>
-        <div class="animation-controls" aria-label="Animation controls">
-          <div class="frame-scrub">
-            <button type="button" class="frame-nav" name="frameLeft" id="frameLeft" onclick="goLeft()" aria-label="Previous frame">⬅️</button>
-            <input type="number" id="frameNum" value="0" aria-label="Current frame">
-            <button type="button" class="frame-nav" name="frameRight" id="frameRight" onclick="goRight()" aria-label="Next frame">➡️</button>
+        <div class="save-panel" aria-label="Save and restore board states">
+          <div class="save-form">
+            <label for="saveNameInput">Save current lights as</label>
+            <div class="save-actions">
+              <input type="text" id="saveNameInput" placeholder="e.g. sunrise" autocomplete="off">
+              <button type="button" id="saveSnapshotButton">Save Board</button>
+            </div>
           </div>
-          <div class="frame-actions">
-            <button id="loadButton" type="button" onclick="loadFrame()">Load</button>
-            <button id="saveButton" type="button" onclick="saveFrame()">Save</button>
-            <button id="animateButton" type="button" onclick="animate()">Animate</button>
+          <div class="load-form">
+            <label for="savedStateSelect">Saved states</label>
+            <div class="load-actions">
+              <select id="savedStateSelect" aria-label="Saved states list">
+                <option value="" disabled selected>No saved states yet</option>
+              </select>
+              <button type="button" id="loadSnapshotButton">Load Selected</button>
+              <button type="button" id="refreshSavesButton" aria-label="Refresh saved states" title="Refresh saved states">↻</button>
+            </div>
           </div>
+          <p id="saveStatus" class="save-status" role="status" aria-live="polite"></p>
         </div>
       </section>
 
