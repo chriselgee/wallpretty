@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-from functools import wraps
-import asyncio
-import json
 import argparse
+import copy
+import json
+import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
-import copy
-import re
-# pip3 install quart
-from quart import Quart, render_template, websocket, copy_current_websocket_context, request
+from threading import Event, Lock, Thread
+
+from flask import Flask, render_template, request
+from flask_sock import Sock
 
 # grab PORT from environment if set
-import os
 if "PORT" in os.environ:
     port = int(os.environ["PORT"])
 else:
@@ -54,14 +54,18 @@ except Exception as ex: # mock-ups if there's no Pi
 
 # import specific fancy functions from ws2801_funcs.py
 try: # because this won't work on dev computer
-  from ws2801_funcs import *
+    from ws2801_funcs import *
 except Exception as ex: # more mock-ups
-  print(f"{OE}Exception caught: {OR}{ex}{OM}")
-  def rainbow_cycle():
-    pass
+    print(f"{OE}Exception caught: {OR}{ex}{OM}")
+    def rainbow_cycle():
+        pass
 
-app = Quart(__name__)
+app = Flask(__name__)
+sock = Sock(app)
 connected = set()
+connected_lock = Lock()
+pixel_lock = Lock()
+HEARTBEAT_INTERVAL = 60
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-b", "--back2front", help="whether to do the back-to-front pixel stacking (default=False)", action="store_true")
@@ -132,86 +136,121 @@ def sanitize_save_name(raw_name):
 
 
 def snapshot_pixel_state():
-    return copy.deepcopy(pixelState)
+    with pixel_lock:
+        return copy.deepcopy(pixelState)
 
-def collect_websocket(func):
-    # when someone connects to /ws, add to inventory of websockets
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        # if args.verbosity > 1: print(f'{OV}entered wrapper(){OM}')
-        global connected
-        connected.add(websocket._get_current_object())
+
+def register_connection(ws):
+    with connected_lock:
+        connected.add(ws)
+
+
+def unregister_connection(ws):
+    with connected_lock:
+        connected.discard(ws)
+
+
+def broadcast(message):
+    if args.verbosity > 0:
+        print(f'{OV}broadcasting {OR}{message}{OM}')
+    with connected_lock:
+        targets = list(connected)
+    stale = []
+    for websock in targets:
         try:
-            return await func(*args, **kwargs)
-        finally:
-            connected.remove(websocket._get_current_object())
-    return wrapper
+            websock.send(message)
+        except Exception as ex:
+            stale.append(websock)
+            print(f'{OE}broadcast failed: {OR}{ex}{OM}')
+    if stale:
+        with connected_lock:
+            for dead_sock in stale:
+                connected.discard(dead_sock)
 
 
-async def broadcast(message):
-    # broadcast a message to all connected websockets
-    if args.verbosity > 0: print(f'{OV}broadcasting {OR}{message}{OM}')
-    for websock in connected:
-        await websock.send(message)
+def clear_board():
+    """Reset both the physical pixels and cached board state."""
+    updates = []
+    with pixel_lock:
+        pixels.clear()
+        for col in range(ROW_LENGTH):
+            for row in range(COL_LENGTH):
+                pixelState[col][row] = [0, 0, 0]
+                updates.append((col, row, 0, 0, 0))
+        pixels.show()
+    return updates
 
 
-async def consumer():
-    # what to do with incoming websocket messages
+def process_websocket_message(raw_message):
     global pixelState
-    global pgrid
-    while True:
-        data = await websocket.receive()
-        if args.verbosity > 0: print(f'{OV}received data {OR}{data}{OM}', end='')
-        try:
-            dataj = json.loads(data)
-            if dataj["Type"] == "Chat": # client is chatting
-                if args.verbosity > 0: print(f'{OV}, broadcasting as chat {OM}')
-                if dataj["Data"].lower() == "rainbow":
+    if isinstance(raw_message, bytes):
+        raw_message = raw_message.decode('utf-8', errors='ignore')
+    if args.verbosity > 0:
+        print(f'{OV}received data {OR}{raw_message}{OM}', end='')
+    try:
+        dataj = json.loads(raw_message)
+    except json.JSONDecodeError as ex:
+        print(f'{OE}invalid JSON payload: {OR}{ex}{OM}')
+        return
+
+    msg_type = dataj.get("Type")
+    if msg_type == "Chat":
+        payload = dataj.get("Data", "")
+        if args.verbosity > 0:
+            print(f'{OV}, broadcasting as chat {OM}')
+        if isinstance(payload, str):
+            lowered = payload.lower()
+            if lowered == "rainbow":
+                with pixel_lock:
                     rainbow_cycle(pixels)
                     brightness_decrease(pixels)
-                if dataj["Data"].lower() == "clear":
-                    pixels.clear()
-                    for column, col in zip(pixelState, range(ROW_LENGTH)):
-                        for pixel, pix in zip(column, range(COL_LENGTH)):
-                            pixelState[col][pix] = [0,0,0]
-                            await broadcast(f'{{"Type":"Pixel","Data":[{col}, {pix}, 0, 0, 0]}}')
-                    pixels.show()
-                await broadcast(f'{{"Type":"Chat","Data":"{dataj["Data"]}"}}')
-            if dataj["Type"] == "Pixel": # client is setting one pixel; update the board
-                # incoming message looks like {"Type":"Pixel","Data":[3, 19, 255,  165,  0]}
-                x = dataj['Data'][0]
-                y = dataj['Data'][1]
-                r = dataj['Data'][2]
-                g = dataj['Data'][3]
-                b = dataj['Data'][4]
-                # if args.verbosity > 0: print (f'{OV}Setting pixel with dataj {OR}{dataj}{OM}')
-                pixelState[x][y] = [r,g,b]
-                pixels.set_pixel(pgrid[x][y],Adafruit_WS2801.RGB_to_color( r, g, b ))
-                pixels.show()
-                if args.verbosity > 0: print(f'{OV}, broadcasting as pixel {OM}')
-                await broadcast(f'{{"Type":"Pixel","Data":{dataj["Data"]}}}')
-            if dataj["Type"] == "Update": # client wants to know the whole image
-                if args.verbosity > 0: print(f'{OV}, updating board with ROW_LENGTH {OR}{ROW_LENGTH} {OM}')
-                for column, col in zip(pixelState, range(ROW_LENGTH)):
-                    for pixel, pix in zip(column, range(COL_LENGTH)):
-                        await broadcast(f'{{"Type":"Pixel","Data":[{col}, {pix}, {pixelState[col][pix][0]}, {pixelState[col][pix][1]}, {pixelState[col][pix][2]}]}}')
-        except Exception as ex: # catch exceptions
-            print(f'{OE}*** Exception in websocket-quart.py, consumer(): {OR}{ex}{OM}') 
-            # return {"Success":False, "Error":f"{inspect.currentframe().f_code.co_name}-Exception: {ex}"}
+            if lowered == "clear":
+                for col, row, r, g, b in clear_board():
+                    broadcast(json.dumps({"Type": "Pixel", "Data": [col, row, r, g, b]}))
+        broadcast(json.dumps({"Type": "Chat", "Data": payload}))
+    elif msg_type == "Pixel":
+        data = dataj.get("Data", [])
+        if not (isinstance(data, list) and len(data) == 5):
+            print(f"{OE}Pixel payload malformed: {OR}{data}{OM}")
+            return
+        x, y, r, g, b = data
+        if not (0 <= x < ROW_LENGTH and 0 <= y < COL_LENGTH):
+            print(f"{OE}Pixel coords out of bounds: {OR}{data}{OM}")
+            return
+        with pixel_lock:
+            pixelState[x][y] = [r, g, b]
+            pixels.set_pixel(pgrid[x][y], Adafruit_WS2801.RGB_to_color(r, g, b))
+            pixels.show()
+        if args.verbosity > 0:
+            print(f'{OV}, broadcasting as pixel {OM}')
+        broadcast(json.dumps({"Type": "Pixel", "Data": data}))
+    elif msg_type == "Update":
+        if args.verbosity > 0:
+            print(f'{OV}, updating board with ROW_LENGTH {OR}{ROW_LENGTH} {OM}')
+        snapshot = snapshot_pixel_state()
+        for col, column in enumerate(snapshot):
+            for row, pixel in enumerate(column):
+                broadcast(json.dumps({
+                    "Type": "Pixel",
+                    "Data": [col, row, pixel[0], pixel[1], pixel[2]]
+                }))
+    else:
+        print(f'{OE}Unknown message type: {OR}{msg_type}{OM}')
 
 
-
-async def producer():
-    # sends sample messages out on a schedule
-    while True:
-        if args.verbosity > 1: print(f'{OV}entered producer(){OM}')
-        message = f'{{"Type":"System","Data":"I\'m watching"}}'
-        await asyncio.sleep(60)
-        await websocket.send(message)
-        if args.verbosity > 0: print(f'{OV}sent message {OR}{message}{OM}')
+def heartbeat_sender(ws, stop_event):
+    message = json.dumps({"Type": "System", "Data": "I'm watching"})
+    while not stop_event.wait(HEARTBEAT_INTERVAL):
+        try:
+            ws.send(message)
+            if args.verbosity > 0:
+                print(f'{OV}sent heartbeat {OR}{message}{OM}')
+        except Exception as ex:
+            print(f'{OE}heartbeat failed: {OR}{ex}{OM}')
+            break
 
 @app.route('/api/saves', methods=['GET'])
-async def list_saved_states():
+def list_saved_states():
     saves = []
     for path in sorted(SAVE_DIR.glob('*.json')):
         try:
@@ -230,11 +269,8 @@ async def list_saved_states():
 
 
 @app.route('/api/saves', methods=['POST'])
-async def save_current_board():
-    try:
-        payload = await request.get_json()
-    except Exception:
-        payload = None
+def save_current_board():
+    payload = request.get_json(silent=True)
     if not payload or 'name' not in payload:
         return {"error": "A save name is required."}, 400
     display_name = payload['name'].strip()
@@ -260,7 +296,7 @@ async def save_current_board():
 
 
 @app.route('/api/saves/<string:save_slug>', methods=['GET'])
-async def load_saved_board(save_slug):
+def load_saved_board(save_slug):
     try:
         slug = sanitize_save_name(save_slug)
     except ValueError:
@@ -276,30 +312,33 @@ async def load_saved_board(save_slug):
     return payload
 
 
-@app.websocket('/ws')
-# defines what to do when websockets are requested from a client
-@collect_websocket
-async def ws():
-    if args.verbosity > 1: print(f'{OV}entered ws(){OM}')
-    await broadcast('{"Type":"System","Data":"Someone connected"}')
-    # await broadcast(b'{"Type":"System","Data":"This is a byte string yo!"}')
-    consumer_task = asyncio.ensure_future( # copy websocket to consumer()
-        copy_current_websocket_context(consumer)(),
-    )
-    producer_task = asyncio.ensure_future( # copy websocket to producer()
-        copy_current_websocket_context(producer)(),
-    )
+@sock.route('/ws')
+def ws_handler(ws):
+    if args.verbosity > 1:
+        print(f'{OV}entered ws(){OM}')
+    register_connection(ws)
+    broadcast(json.dumps({"Type": "System", "Data": "Someone connected"}))
+    stop_event = Event()
+    producer_thread = Thread(target=heartbeat_sender, args=(ws, stop_event), daemon=True)
+    producer_thread.start()
     try:
-        result = await asyncio.gather(consumer_task, producer_task)
-        if args.verbosity > 1: print(f'{OV}result is {OR}{result}{OM}')
+        while True:
+            data = ws.receive()
+            if data is None:
+                break
+            process_websocket_message(data)
+    except Exception as ex:
+        print(f'{OE}*** Exception in websocket handler: {OR}{ex}{OM}')
     finally:
-        consumer_task.cancel()
-        producer_task.cancel()
+        stop_event.set()
+        producer_thread.join(timeout=1)
+        unregister_connection(ws)
+
 
 @app.route('/')
-# defines behavior for clients requesting /
-async def index():
-    if args.verbosity > 0: print(f'{OV}/ requested via {OR}{request.method}{OV}, args.verbosity={OR}{args.verbosity}{OM}')
+def index():
+    if args.verbosity > 0:
+        print(f'{OV}/ requested via {OR}{request.method}{OV}, args.verbosity={OR}{args.verbosity}{OM}')
     width = 10 # manually setting size of grid
     height = 20
     # build a list of x, y values for render to iterate through, e.g. 0,0 through 9,19
@@ -308,7 +347,7 @@ async def index():
             xs += [i,]
     for i in range(height):
             ys += [(height - i - 1),]
-    return await render_template('index.html', xs=xs, ys=ys, height=height)
+    return render_template('index.html', xs=xs, ys=ys, height=height)
 
 if __name__ == '__main__':
     pixels.clear()

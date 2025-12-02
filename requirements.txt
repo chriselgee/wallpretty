@@ -3,4 +3,6 @@ adafruit_ws2801
 RPi.GPIO
 
 # Requirement for running web server
-quart
+flask
+flask-sock
+simple-websocket

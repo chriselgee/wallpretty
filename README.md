@@ -6,15 +6,15 @@ WS2801 project, creating a mountable, interactive, LED... thinger
 ## Background
 There are plenty of ways to build something like this.
 I used a RaspberryPi 3B+ on Raspbian Buster.
-Python 3.7+ is a requirement because of the `quart` import.
-Other webservers will work fine, but I chose quart because of how simply it allows websockets.
+Python 3.8+ is recommended because of the Flask-based websocket stack.
+Other webservers will work fine, but I chose Flask + Flask-Sock because of how simply it allows websockets.
 There are no .js includes on the HTML side, so that piece of the communications is easy to parse by a human.
 Learning more about websockets was a side goal for this project.
 
 ## Important Files
 - test.py: Runs WS2801 grid demo
-- websocket-quart.py: HTTP-based control for grid
-- templates/index.html: Base HTML doc for quart to render and send to client browsers
+- websocket-quart.py: Flask-based HTTP/websocket control for the grid
+- templates/index.html: Base HTML doc for Flask to render and send to client browsers
 - ws2801_funcs.py: Carries some of the WS2801 functions
 - Dockerfile: Attempt to make this Docker-able.  WIP.  GPIO is hard.  (-:
 

@@ -3,7 +3,7 @@
 # https://github.com/adafruit/Adafruit_Python_WS2801
 # Simple demo of of the WS2801/SPI-like addressable RGB LED lights.
 
-# python3 -m pip install quart RPi.GPIO adafruit-ws2801
+# python3 -m pip install flask flask-sock simple-websocket RPi.GPIO adafruit-ws2801
 
 import time
 import RPi.GPIO as GPIO
