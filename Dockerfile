@@ -19,4 +19,4 @@ RUN groupadd -r wallpretty && useradd --no-log-init --system -r -g wallpretty wa
 
 USER wallpretty
 
-CMD ["python3", "websocket-quart.py"]
+CMD ["python3", "app.py"]

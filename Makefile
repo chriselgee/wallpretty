@@ -9,7 +9,7 @@ help:
 	@echo "Targets:"
 	@echo "  build  - build $(DOCKER_IMAGE) image using Docker"
 	@echo "  test   - launch the website inside the image for browser testing"
-	@echo "  run    - start python3 websocket-quart.py in Docker (binds port 5000)"
+	@echo "  run    - start python3 app.py in Docker (binds port 5000)"
 	@echo "  clean  - remove cached Python build files"
 
 build:

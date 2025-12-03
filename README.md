@@ -13,7 +13,7 @@ Learning more about websockets was a side goal for this project.
 
 ## Important Files
 - test.py: Runs WS2801 grid demo
-- websocket-quart.py: Flask-based HTTP/websocket control for the grid
+- app.py: Flask-based HTTP/websocket control for the grid
 - templates/index.html: Base HTML doc for Flask to render and send to client browsers
 - ws2801_funcs.py: Carries some of the WS2801 functions
 - Dockerfile: Attempt to make this Docker-able.  WIP.  GPIO is hard.  (-:
